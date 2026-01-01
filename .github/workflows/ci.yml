@@ -38,3 +38,5 @@ jobs:
         run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
       - name: Clippy
         run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
+      - name: Tests
+        run: cargo test ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
