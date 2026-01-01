@@ -1,0 +1,3 @@
+# embedded-hal-sim
+
+This is a collection of types that implement the embedded-hal traits or tries to mimic simiar types such as the Adc from embassy etc. The hardware is mocked in such a way so as to make it possible to run application code and interact with the simulated device through the fake hardware in real time. This is in contrast to [embedded-hal-mock](https://github.com/dbrgn/embedded-hal-mock) which defines the hardware behaviour more statically.
