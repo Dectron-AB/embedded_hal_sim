@@ -16,10 +16,10 @@ jobs:
         rust:
           - stable
         flash:
-          - flash
+          - --features=flash
           - ''
         ethernet:
-          - ethernet
+          - --features=ethernet
           - ''
 
     steps:
@@ -33,8 +33,8 @@ jobs:
       - name: Format check
         run: cargo fmt --check
       - name: Regular build
-        run: cargo check --features ${{ matrix.flash }} --features ${{ matrix.ethernet }} --no-default-features
+        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
       - name: Build examples
-        run: cargo check --examples --tests --features ${{ matrix.flash }} --features ${{ matrix.ethernet }} --no-default-features
+        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
       - name: Clippy
-        run: cargo clippy --examples --tests --features ${{ matrix.flash }} --features ${{ matrix.ethernet }} --no-default-features
+        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
