@@ -8,12 +8,12 @@ use embedded_storage_async::nor_flash::{
 pub const PAGE_SIZE: u32 = 256;
 pub const SECTOR_SIZE: u32 = PAGE_SIZE * 16;
 
-pub struct W25q32jv<const SIZE: usize> {
-    data: Arc<RwLock<[u8; SIZE]>>,
+pub struct W25q32jv {
+    data: Arc<RwLock<Box<[u8]>>>,
 }
 
-impl<const SIZE: usize> W25q32jv<SIZE> {
-    pub fn new(data: Arc<RwLock<[u8; SIZE]>>) -> Self {
+impl W25q32jv {
+    pub fn new(data: Arc<RwLock<Box<[u8]>>>) -> Self {
         Self { data }
     }
 }
@@ -38,11 +38,11 @@ impl NorFlashError for Error {
     }
 }
 
-impl<const SIZE: usize> embedded_storage_async::nor_flash::ErrorType for W25q32jv<SIZE> {
+impl embedded_storage_async::nor_flash::ErrorType for W25q32jv {
     type Error = Error;
 }
 
-impl<const SIZE: usize> SyncReadNorFlash for W25q32jv<SIZE> {
+impl SyncReadNorFlash for W25q32jv {
     const READ_SIZE: usize = 1;
 
     fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
@@ -54,11 +54,11 @@ impl<const SIZE: usize> SyncReadNorFlash for W25q32jv<SIZE> {
     }
 
     fn capacity(&self) -> usize {
-        SIZE
+        self.data.read().unwrap().len()
     }
 }
 
-impl<const SIZE: usize> AsyncReadNorFlash for W25q32jv<SIZE> {
+impl AsyncReadNorFlash for W25q32jv {
     const READ_SIZE: usize = 1;
 
     async fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
@@ -66,11 +66,11 @@ impl<const SIZE: usize> AsyncReadNorFlash for W25q32jv<SIZE> {
     }
 
     fn capacity(&self) -> usize {
-        SIZE
+        self.data.read().unwrap().len()
     }
 }
 
-impl<const SIZE: usize> SyncNorFlash for W25q32jv<SIZE> {
+impl SyncNorFlash for W25q32jv {
     const WRITE_SIZE: usize = 1;
 
     const ERASE_SIZE: usize = SECTOR_SIZE as usize;
@@ -106,7 +106,7 @@ impl<const SIZE: usize> SyncNorFlash for W25q32jv<SIZE> {
     }
 }
 
-impl<const SIZE: usize> AsyncNorFlash for W25q32jv<SIZE> {
+impl AsyncNorFlash for W25q32jv {
     const WRITE_SIZE: usize = 1;
 
     const ERASE_SIZE: usize = SECTOR_SIZE as usize;
@@ -129,7 +129,7 @@ mod test {
 
     #[test]
     fn test() {
-        let mut data = [0xFF; SECTOR_SIZE as usize];
+        let mut data = vec![0xFFu8; SECTOR_SIZE as usize].into_boxed_slice();
         data[0] = 0;
         data[1] = 1;
         data[2] = 2;
