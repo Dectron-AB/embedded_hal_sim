@@ -21,7 +21,9 @@ jobs:
         ethernet:
           - --features=ethernet
           - ''
-
+        ui:
+          - --features=egui
+          - ''
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -33,10 +35,10 @@ jobs:
       - name: Format check
         run: cargo fmt --check
       - name: Regular build
-        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
+        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
       - name: Build examples
-        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
+        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
       - name: Clippy
-        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
+        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
       - name: Tests
-        run: cargo test ${{ matrix.flash }} ${{ matrix.ethernet }} --no-default-features
+        run: cargo test ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
