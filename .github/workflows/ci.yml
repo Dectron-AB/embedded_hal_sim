@@ -21,7 +21,7 @@ jobs:
         ethernet:
           - --features=ethernet
           - ''
-        ui:
+        egui:
           - --features=egui
           - ''
     steps:
