@@ -29,7 +29,7 @@ flash = ["embedded-storage-async", "embedded-storage"]
 embedded-storage-async = ["dep:embedded-storage-async"]
 embedded-storage = ["dep:embedded-storage"]
 
-egui = ["dep:egui", "eframe", "winit"]
+egui = ["dep:egui", "eframe", "winit", "tokio/rt"]
 eframe = ["dep:eframe"]
 winit = ["dep:winit"]
 
