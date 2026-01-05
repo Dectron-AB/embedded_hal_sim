@@ -29,6 +29,10 @@ async fn main() -> ! {
 
     info!("Hello World!");
 
+    embassy_time::Timer::after_secs(1).await;
+
+    info!("Waiting works!");
+
     // Generate random seed
     let seed = rand::random();
 
@@ -36,9 +40,12 @@ async fn main() -> ! {
     static STATE: StaticCell<State<MTU, 2, 2>> = StaticCell::new();
     let state = STATE.init(State::<MTU, 2, 2>::new());
 
+    info!("Creating ethernet interface");
     let (device, runner) = ethernet::new(state, HardwareAddress::Ethernet(mac_addr));
+    info!("Spawn ethernet task");
     tokio::task::spawn_local(ethernet_task(runner));
 
+    info!("Configure dhcp");
     let config = embassy_net::Config::dhcpv4(Default::default());
     //let config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {
     //    address: Ipv4Cidr::new(Ipv4Address::new(10, 42, 0, 61), 24),
@@ -47,11 +54,15 @@ async fn main() -> ! {
     //});
 
     static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+    info!("Setup stack");
     let (stack, runner) =
         embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
+    info!("Spawn net stack");
     // Launch network task
     tokio::task::spawn_local(net_task(runner));
+
+    info!("Await config up");
 
     // Ensure DHCP configuration is up before trying connect
     stack.wait_config_up().await;
