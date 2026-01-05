@@ -6,15 +6,17 @@ use embassy_net::{Ipv4Address, StackResources};
 use embassy_net_driver_channel::{Device, State};
 use embedded_hal_sim::ethernet::{self, EthernetBackgroundRunner};
 use embedded_io_async::Write;
+use log::info;
+use simple_logger::SimpleLogger;
 use static_cell::StaticCell;
 
-async fn ethernet_task(
-    runner: EthernetBackgroundRunner<'static, MTU>,
-) -> ! {
+async fn ethernet_task(runner: EthernetBackgroundRunner<'static, MTU>) -> ! {
+    log::trace!("Ethernet task started");
     runner.run().await
 }
 
 async fn net_task(mut runner: embassy_net::Runner<'static, Device<'static, MTU>>) -> ! {
+    log::trace!("Net task started");
     runner.run().await
 }
 
@@ -23,12 +25,14 @@ const MTU: usize = 1514;
 
 #[tokio::main(flavor = "local")]
 async fn main() -> ! {
-    println!("Hello World!");
+    SimpleLogger::new().init().unwrap();
+
+    info!("Hello World!");
 
     // Generate random seed
     let seed = rand::random();
 
-    let mac_addr = [0x02, 234, 3, 4, 82, 231];
+    let mac_addr = [0xa6, 0x39, 0xf0, 0xbd, 0x03, 0xf0];
     static STATE: StaticCell<State<MTU, 2, 2>> = StaticCell::new();
     let state = STATE.init(State::<MTU, 2, 2>::new());
 
@@ -52,7 +56,7 @@ async fn main() -> ! {
     // Ensure DHCP configuration is up before trying connect
     stack.wait_config_up().await;
 
-    println!("Network task initialized");
+    info!("Network task initialized");
 
     // Then we can use it!
     let mut rx_buffer = [0; 1024];
@@ -64,19 +68,19 @@ async fn main() -> ! {
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
 
         let remote_endpoint = (Ipv4Address::new(10, 42, 0, 1), 8000);
-        println!("connecting...");
+        info!("connecting...");
         let r = socket.connect(remote_endpoint).await;
         if let Err(e) = r {
-            println!("connect error: {:?}", e);
+            info!("connect error: {:?}", e);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
-        println!("connected!");
+        info!("connected!");
         let buf = [0; 1024];
         loop {
             let r = socket.write_all(&buf).await;
             if let Err(e) = r {
-                println!("write error: {:?}", e);
+                info!("write error: {:?}", e);
                 break;
             }
             //Timer::after_secs(1).await;

@@ -32,7 +32,10 @@ impl<'d, const MTU: usize> EthernetBackgroundRunner<'d, MTU> {
         let (_s, mut rx_buff, mut tx_buff) = self.runner.split();
         let iface = self.iface;
 
+        log::trace!("Boop");
+
         loop {
+            log::trace!("Baap");
             // Wait for either..
             tokio::select! {
                 n = async {
@@ -41,10 +44,12 @@ impl<'d, const MTU: usize> EthernetBackgroundRunner<'d, MTU> {
                     // ... *AND* the interface is signaling an interrupt, indicating a packet is available to receive
                     iface.recv(buf).await.unwrap()
                 } => {
+                    log::trace!("Poop");
                     rx_buff.rx_done(n)
                 }
                 // ... or a TX buffer becoming available, i.e. embassy-net wants to send a packet
                 buf = tx_buff.tx_buf() => {
+                    log::trace!("Paap");
                     // a packet is ready to be sent!
                     iface.send_all(buf).await.unwrap();
                     tx_buff.tx_done();
