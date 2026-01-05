@@ -28,7 +28,7 @@ pub fn new<'d, const MTU: usize, const N_RX: usize, const N_TX: usize>(
 
 impl<'d, const MTU: usize> EthernetBackgroundRunner<'d, MTU> {
     /// This needs to be run from a tokio executor
-    pub async fn run(self) {
+    pub async fn run(self) -> ! {
         let (_s, mut rx_buff, mut tx_buff) = self.runner.split();
         let iface = self.iface;
 

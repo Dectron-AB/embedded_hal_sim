@@ -5,22 +5,45 @@ edition = "2024"
 publish = ["gitea"]
 
 [dependencies]
+eframe = { version = "0.33.3", optional = true }
+egui = { version = "0.33.3", optional = true }
+embassy-net = { version = "0.8.0", features = ["tcp", "dhcpv4"], optional = true }
 embassy-net-driver-channel = { version = "0.3.2", optional = true }
+embassy-time = { version = "0.5.0", features = ["std", "generic-queue-8"], optional = true }
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
+embedded-io-async = { version = "0.7.0", optional = true }
 embedded-storage = { version = "0.3.1", optional = true }
 embedded-storage-async = { version = "0.4.1", optional = true }
-tokio = { version = "1.48.0", optional = true, features = ["macros"] }
+futures = "0.3.31"
+rand = { version = "0.9.2", optional = true }
+static_cell = { version = "2.1.1", optional = true }
+tokio = { version = "1.49.0", optional = true, features = ["macros", "time"] }
 tokio-tun = { version = "0.15.0", optional = true }
+winit = { version = "0.30.12", optional = true }
 
 [features]
-default = ["ethernet", "flash"]
+default = ["ethernet", "flash", "tokio/rt"]
 
-ethernet = ["tokio-tun", "embassy-net-driver-channel", "tokio"]
+ethernet = ["tokio-tun", "embassy-net-driver-channel", "tokio", "embassy-net"]
+embassy-net = ["dep:embassy-net"]
 tokio-tun = ["dep:tokio-tun"]
 embassy-net-driver-channel = ["dep:embassy-net-driver-channel"]
+rand = ["dep:rand"]
+
 tokio = ["dep:tokio"]
 
 flash = ["embedded-storage-async", "embedded-storage"]
 embedded-storage-async = ["dep:embedded-storage-async"]
 embedded-storage = ["dep:embedded-storage"]
+
+egui = ["dep:egui", "eframe", "winit", "tokio/rt"]
+eframe = ["dep:eframe"]
+winit = ["dep:winit"]
+static_cell = ["dep:static_cell"]
+embedded-io-async = ["dep:embedded-io-async"]
+embassy-time = ["dep:embassy-time"]
+
+[[example]]
+name = "ethernet"
+required-features = ["ethernet", "tokio/rt", "static_cell", "rand", "embedded-io-async", "embassy-time"]
