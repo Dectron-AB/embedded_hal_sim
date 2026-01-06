@@ -1,11 +1,18 @@
+///
+/// Use this to run in browser
+/// trunk serve --example morse --features=egui
+///
+/// Use this to run
+mod utils;
+
 use core::time::Duration;
 use egui::{Color32, Pos2};
 use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal_sim::sleep;
 use embedded_hal_sim::{
     gpio::output::{Output, OutputStimulus},
     serial::{self, Uart, UartStimulus},
 };
-use embedded_hal_sim::sleep;
 
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::EventLoopBuilderHook;
@@ -14,15 +21,63 @@ use winit::platform::windows::EventLoopBuilderExtWindows;
 #[cfg(target_os = "linux")]
 use winit::platform::x11::EventLoopBuilderExtX11;
 
+const TIME_UNIT: Duration = Duration::from_millis(250);
+
+// When compiling to web using trunk:
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use crate::utils::run_wasm;
+
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+
+    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
+    let (led, led_stimulus) = Output::new(PinState::Low);
+
+    run_wasm(
+        MyApp {
+            uart: uart_stimulus,
+            led: led_stimulus,
+            message: String::new(),
+        },
+        || async { simulated_app(uart, led).await },
+    );
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let (mut uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
-    let (mut led, led_stimulus) = Output::new(PinState::Low);
+    use std::thread;
+
+    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
+    let (led, led_stimulus) = Output::new(PinState::Low);
 
     thread::spawn(|| ui(uart_stimulus, led_stimulus));
 
-    simulated_app().await;
+    simulated_app(uart, led).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn ui(uart: UartStimulus, led: OutputStimulus) {
+    let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
+        event_loop_builder.with_any_thread(true);
+    }));
+    let options = eframe::NativeOptions {
+        event_loop_builder,
+        ..Default::default()
+    };
+    eframe::run_native(
+        "My hardware simulator",
+        options,
+        Box::new(|_| {
+            Ok(Box::new(MyApp {
+                uart,
+                led,
+                message: String::new(),
+            }))
+        }),
+    )
+    .unwrap();
 }
 
 async fn simulated_app(mut uart: Uart, mut led: Output) -> ! {
@@ -35,60 +90,6 @@ async fn simulated_app(mut uart: Uart, mut led: Output) -> ! {
         }
     }
 }
-
-// When compiling to web using trunk:
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    use eframe::wasm_bindgen::JsCast as _;
-
-    // Redirect `log` message to `console.log` and friends:
-    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-
-    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
-    let (led, led_stimulus) = Output::new(PinState::Low);
-
-    let web_options = eframe::WebOptions::default();
-
-    wasm_bindgen_futures::spawn_local(async {
-        let document = web_sys::window()
-            .expect("No window")
-            .document()
-            .expect("No document");
-
-        let canvas = document
-            .get_element_by_id("the_canvas_id")
-            .expect("Failed to find the_canvas_id")
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .expect("the_canvas_id was not a HtmlCanvasElement");
-
-        let start_result = eframe::WebRunner::new()
-            .start(
-                canvas,
-                web_options,
-                Box::new(|_| Ok(Box::new(MyApp{ uart: uart_stimulus, led: led_stimulus, message: String::new() }))),
-            )
-            .await;
-
-        // Remove the loading text and spinner:
-        if let Some(loading_text) = document.get_element_by_id("loading_text") {
-            match start_result {
-                Ok(_) => {
-                    loading_text.remove();
-                }
-                Err(e) => {
-                    loading_text.set_inner_html(
-                        "<p> The app has crashed. See the developer console for details. </p>",
-                    );
-                    panic!("Failed to start eframe: {e:?}");
-                }
-            }
-        }
-
-        simulated_app(uart, led).await;
-    });
-}
-
-const TIME_UNIT: Duration = Duration::from_millis(250);
 
 // https://en.wikipedia.org/wiki/Morse_code#/media/File:International_Morse_Code.svg
 async fn blink_morse(character: char, led: &mut Output) {
@@ -157,21 +158,6 @@ async fn blink_morse(character: char, led: &mut Output) {
     sleep(2 * TIME_UNIT).await;
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn ui(mut uart: UartStimulus, mut led: OutputStimulus) {
-    let message = String::new();
-
-    let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
-        event_loop_builder.with_any_thread(true);
-    }));
-    let options = eframe::NativeOptions {
-        event_loop_builder,
-        ..Default::default()
-    };
-    eframe::run_native("My hardware simulator", options, Ok(Box::new(MyApp { uart, led, message: String::new() })))
-    .unwrap();
-}
-
 struct MyApp {
     message: String,
     led: OutputStimulus,
@@ -182,7 +168,7 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(20));
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
+            ui.heading("My morse Application");
             ui.horizontal(|ui| {
                 let name_label = ui.label("Message: ");
                 ui.text_edit_singleline(&mut self.message)
