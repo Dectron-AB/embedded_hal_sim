@@ -8,6 +8,9 @@ use embedded_hal_sim::{
     serial::{self, UartStimulus},
 };
 use tokio::time::sleep;
+#[cfg(target_os = "windows")]
+use winit::platform::windows::EventLoopBuilderExtWindows;
+#[cfg(target_os = "linux")]
 use winit::platform::x11::EventLoopBuilderExtX11;
 
 #[tokio::main(flavor = "current_thread")]
