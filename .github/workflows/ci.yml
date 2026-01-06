@@ -24,9 +24,6 @@ jobs:
         egui:
           - --features=egui
           - ''
-        wasm:
-          - --target wasm32-unknown-unknown
-          - ''
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -62,14 +59,13 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
-          target: wasm32-unknown-unknown
           override: true
 
       - name: Format check
         run: cargo fmt --check
       - name: Regular build
-        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
+        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown
       - name: Build examples
-        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
+        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown
       - name: Clippy
-        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
+        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown
