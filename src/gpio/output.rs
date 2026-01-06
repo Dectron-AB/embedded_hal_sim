@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use embedded_hal::digital::PinState;
 
@@ -28,19 +31,19 @@ impl embedded_hal::digital::ErrorType for Output {
 
 impl embedded_hal::digital::OutputPin for Output {
     fn set_low(&mut self) -> Result<(), Self::Error> {
-        self.state.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.state.store(false, Ordering::SeqCst);
         Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
-        self.state.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.state.store(true, Ordering::SeqCst);
         Ok(())
     }
 }
 
 impl OutputStimulus {
     pub fn get(&mut self) -> PinState {
-        match self.state.load(std::sync::atomic::Ordering::SeqCst) {
+        match self.state.load(Ordering::SeqCst) {
             true => PinState::High,
             false => PinState::Low,
         }
