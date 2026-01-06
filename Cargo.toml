@@ -8,12 +8,14 @@ publish = ["gitea"]
 eframe = { version = "0.33.3", optional = true }
 egui = { version = "0.33.3", optional = true }
 embassy-net-driver-channel = { version = "0.3.2", optional = true }
+embedded-graphics = "0.8.1"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 embedded-storage = { version = "0.3.1", optional = true }
 embedded-storage-async = { version = "0.4.1", optional = true }
 futures = "0.3.31"
 log = "0.4.29"
+parking_lot = "0.12.5"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

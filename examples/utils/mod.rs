@@ -1,8 +1,11 @@
 #[cfg(target_arch = "wasm32")]
-pub fn run_wasm<F: FnOnce() -> Fut + 'static, Fut: Future>(
-    app: impl eframe::App + 'static,
-    simulated_app: F,
-) {
+pub fn run_wasm<F, Fut, Fa, A>(app: Fa, simulated_app: F)
+where
+    Fa: FnOnce(&eframe::CreationContext<'_>) -> A + 'static,
+    A: eframe::App + 'static,
+    F: FnOnce() -> Fut + 'static,
+    Fut: Future,
+{
     use eframe::wasm_bindgen::JsCast as _;
 
     let web_options = eframe::WebOptions::default();
@@ -20,7 +23,7 @@ pub fn run_wasm<F: FnOnce() -> Fut + 'static, Fut: Future>(
             .expect("the_canvas_id was not a HtmlCanvasElement");
 
         let start_result = eframe::WebRunner::new()
-            .start(canvas, web_options, Box::new(|_| Ok(Box::new(app))))
+            .start(canvas, web_options, Box::new(|cc| Ok(Box::new(app(cc)))))
             .await;
 
         // Remove the loading text and spinner:
