@@ -6,10 +6,10 @@ use futures::{
     stream,
 };
 pub struct Uart {
-    #[cfg(feature = "tokio")]
+    #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
     rx: mpsc::Receiver<u8>,
     tx: mpsc::Sender<u8>,
-    #[cfg(feature = "tokio")]
+    #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
     timeout: Duration,
 }
 
@@ -25,33 +25,35 @@ impl Uart {
 
         (
             Uart {
-                #[cfg(feature = "tokio")]
+                #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
                 rx: _rx_receiver,
                 tx: tx_sender,
-                #[cfg(feature = "tokio")]
+                #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
                 timeout,
             },
             UartStimulus {
-                #[cfg(feature = "tokio")]
+                #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
                 rx: _tx_receiver,
                 tx: rx_sender,
-                #[cfg(feature = "tokio")]
+                #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
                 timeout,
             },
         )
     }
 
-    #[cfg(feature = "tokio")]
+    #[cfg(any(feature = "tokio", target_arch = "wasm32"))]
     pub async fn read_until_idle(&mut self, dst: &mut [u8]) -> usize {
         use futures::StreamExt;
         use std::pin::pin;
 
         // TODO: consider ways to avoid the requirement on tokio
         for (i, byte) in dst.iter_mut().enumerate() {
-            let t = pin!(tokio::time::sleep(self.timeout));
-            tokio::select! {
-                b = self.rx.next() => *byte = b.unwrap(),
-                _ = t => return i,
+            use futures::FutureExt;
+
+            let t = pin!(crate::sleep(self.timeout));
+            futures::select! {
+                b = self.rx.next().fuse() => *byte = b.unwrap(),
+                _ = t.fuse() => return i,
             }
         }
         dst.len()

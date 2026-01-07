@@ -42,3 +42,31 @@ jobs:
         run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
       - name: Tests
         run: cargo test ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features
+
+  wasm:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+        flash:
+          - --features=flash
+        egui:
+          - --features=egui
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Format check
+        run: cargo fmt --check
+      - name: Regular build
+        run: cargo check ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown
+      - name: Build examples
+        run: cargo check --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown
+      - name: Clippy
+        run: cargo clippy --examples --tests ${{ matrix.flash }} ${{ matrix.ethernet }} ${{ matrix.egui }} --no-default-features --target=wasm32-unknown-unknown

@@ -1,25 +1,88 @@
-use std::{thread, time::Duration};
+///
+/// Use this to run in browser
+/// trunk serve --example morse --features=egui
+///
+/// Use this to run
+mod utils;
 
-use eframe::EventLoopBuilderHook;
+use core::time::Duration;
 use egui::{Color32, Pos2};
+use embedded_hal::digital::InputPin;
 use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal_sim::gpio::{self, Input};
+use embedded_hal_sim::sleep;
 use embedded_hal_sim::{
-    gpio::output::{Output, OutputStimulus},
-    serial::{self, UartStimulus},
+    gpio::Output,
+    serial::{self, Uart, UartStimulus},
 };
-use tokio::time::sleep;
+
+#[cfg(not(target_arch = "wasm32"))]
+use eframe::EventLoopBuilderHook;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::EventLoopBuilderExtWindows;
 #[cfg(target_os = "linux")]
 use winit::platform::x11::EventLoopBuilderExtX11;
 
+const TIME_UNIT: Duration = Duration::from_millis(250);
+
+// When compiling to web using trunk:
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use crate::utils::run_wasm;
+
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+
+    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
+    let (led_stimulus, led) = gpio::new(PinState::Low);
+
+    run_wasm(
+        |_| MyApp {
+            uart: uart_stimulus,
+            led: led_stimulus,
+            message: String::new(),
+        },
+        || async { simulated_app(uart, led).await },
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let (mut uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
-    let (mut led, led_stimulus) = Output::new(PinState::Low);
+    use std::thread;
+
+    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
+    let (led_stimulus, led) = gpio::new(PinState::Low);
 
     thread::spawn(|| ui(uart_stimulus, led_stimulus));
 
+    simulated_app(uart, led).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn ui(uart: UartStimulus, led: Input) {
+    let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
+        event_loop_builder.with_any_thread(true);
+    }));
+    let options = eframe::NativeOptions {
+        event_loop_builder,
+        ..Default::default()
+    };
+    eframe::run_native(
+        "My hardware simulator",
+        options,
+        Box::new(|_| {
+            Ok(Box::new(MyApp {
+                uart,
+                led,
+                message: String::new(),
+            }))
+        }),
+    )
+    .unwrap();
+}
+
+async fn simulated_app(mut uart: Uart, mut led: Output) -> ! {
     let mut buf = [0; 256];
     loop {
         let count = uart.read_until_idle(&mut buf).await;
@@ -29,8 +92,6 @@ async fn main() {
         }
     }
 }
-
-const TIME_UNIT: Duration = Duration::from_millis(250);
 
 // https://en.wikipedia.org/wiki/Morse_code#/media/File:International_Morse_Code.svg
 async fn blink_morse(character: char, led: &mut Output) {
@@ -99,38 +160,34 @@ async fn blink_morse(character: char, led: &mut Output) {
     sleep(2 * TIME_UNIT).await;
 }
 
-fn ui(mut uart: UartStimulus, mut led: OutputStimulus) {
-    let mut message = String::new();
+struct MyApp {
+    message: String,
+    led: Input,
+    uart: UartStimulus,
+}
 
-    let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
-        event_loop_builder.with_any_thread(true);
-    }));
-    let options = eframe::NativeOptions {
-        event_loop_builder,
-        ..Default::default()
-    };
-    eframe::run_simple_native("My hardware simulator", options, move |ctx, _frame| {
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(20));
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
+            ui.heading("My morse Application");
             ui.horizontal(|ui| {
                 let name_label = ui.label("Message: ");
-                ui.text_edit_singleline(&mut message)
+                ui.text_edit_singleline(&mut self.message)
                     .labelled_by(name_label.id);
             });
             if ui.button("Send").clicked()
-                && let Ok(()) = uart.try_write(message.as_bytes())
+                && let Ok(()) = self.uart.try_write(self.message.as_bytes())
             {
-                message.clear();
+                self.message.clear();
             }
 
-            let color = match led.get() {
-                PinState::Low => Color32::WHITE,
-                PinState::High => Color32::GREEN,
+            let color = match self.led.is_high().unwrap() {
+                true => Color32::GREEN,
+                false => Color32::WHITE,
             };
             ui.painter()
                 .circle_filled(Pos2::new(50.0, 150.0), 25.0, color);
         });
-    })
-    .unwrap();
+    }
 }

@@ -1,32 +1,17 @@
+use embedded_hal::digital::{InputPin, PinState};
 use std::sync::{Arc, atomic::AtomicBool};
 
-use embedded_hal::digital::PinState;
-
+use crate::utils::SignalRx;
 pub struct Input {
-    state: Arc<AtomicBool>,
-}
-
-pub struct InputStimulus {
-    state: Arc<AtomicBool>,
-}
-
-impl Input {
-    pub fn new(initial_state: PinState) -> (Self, InputStimulus) {
-        let state = Arc::new(AtomicBool::new(initial_state == PinState::High));
-        (
-            Self {
-                state: Arc::clone(&state),
-            },
-            InputStimulus { state },
-        )
-    }
+    pub(crate) state: Arc<AtomicBool>,
+    pub(crate) w: SignalRx<PinState>,
 }
 
 impl embedded_hal::digital::ErrorType for Input {
     type Error = core::convert::Infallible;
 }
 
-impl embedded_hal::digital::InputPin for Input {
+impl InputPin for Input {
     fn is_high(&mut self) -> Result<bool, Self::Error> {
         Ok(self.state.load(std::sync::atomic::Ordering::SeqCst))
     }
@@ -36,9 +21,43 @@ impl embedded_hal::digital::InputPin for Input {
     }
 }
 
-impl InputStimulus {
-    pub fn set(&mut self, state: PinState) {
-        self.state
-            .store(state == PinState::High, std::sync::atomic::Ordering::SeqCst);
+impl embedded_hal_async::digital::Wait for Input {
+    async fn wait_for_high(&mut self) -> Result<(), Self::Error> {
+        if self.is_high()? {
+            return Ok(());
+        }
+        loop {
+            if self.w.wait().await == PinState::High {
+                return Ok(());
+            }
+        }
+    }
+
+    async fn wait_for_low(&mut self) -> Result<(), Self::Error> {
+        if self.is_low()? {
+            return Ok(());
+        }
+        loop {
+            if self.w.wait().await == PinState::Low {
+                return Ok(());
+            }
+        }
+    }
+
+    async fn wait_for_rising_edge(&mut self) -> Result<(), Self::Error> {
+        self.wait_for_low().await?;
+        self.wait_for_high().await
+    }
+
+    async fn wait_for_falling_edge(&mut self) -> Result<(), Self::Error> {
+        self.wait_for_high().await?;
+        self.wait_for_low().await
+    }
+
+    async fn wait_for_any_edge(&mut self) -> Result<(), Self::Error> {
+        match self.is_high()? {
+            true => self.wait_for_low().await,
+            false => self.wait_for_high().await,
+        }
     }
 }
