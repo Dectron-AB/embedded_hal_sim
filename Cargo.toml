@@ -52,3 +52,7 @@ winit = ["dep:winit"]
 [[example]]
 name = "morse"
 required-features = ["egui"]
+
+[[example]]
+name = "display-counter"
+required-features = ["egui"]
