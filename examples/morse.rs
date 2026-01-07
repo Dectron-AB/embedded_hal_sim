@@ -9,12 +9,12 @@ use core::time::Duration;
 use egui::{Color32, Pos2};
 use embedded_hal::digital::InputPin;
 use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal_sim::gpio::Output;
 use embedded_hal_sim::gpio::{self, Input};
 use embedded_hal_sim::sleep;
-use embedded_hal_sim::{
-    gpio::Output,
-    serial::{self, Uart, UartStimulus},
-};
+#[cfg(feature = "web-serial")]
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::EventLoopBuilderHook;
@@ -25,6 +25,12 @@ use winit::platform::x11::EventLoopBuilderExtX11;
 
 const TIME_UNIT: Duration = Duration::from_millis(250);
 
+#[cfg(not(feature = "web-serial"))]
+use embedded_hal_sim::serial::{split as uart, split::Split as Uart};
+
+#[cfg(feature = "web-serial")]
+use embedded_hal_sim::serial::{self, web_serial as uart, web_serial::Web as Uart};
+
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
@@ -33,14 +39,24 @@ fn main() {
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-    let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
+    let (uart, uart_stimulus) = uart::new(
+        Duration::from_millis(20),
+        #[cfg(not(feature = "web-serial"))]
+        10,
+    );
     let (led_stimulus, led) = gpio::new(PinState::Low);
+
+    #[cfg(feature = "web-serial")]
+    let uart_stimulus = Some(uart_stimulus);
 
     run_wasm(
         |_| MyApp {
             uart: uart_stimulus,
             led: led_stimulus,
+            #[cfg(not(feature = "web-serial"))]
             message: String::new(),
+            #[cfg(feature = "web-serial")]
+            is_connected: Arc::new(AtomicBool::new(false)),
         },
         || async { simulated_app(uart, led).await },
     );
@@ -83,9 +99,9 @@ fn ui(uart: UartStimulus, led: Input) {
 }
 
 async fn simulated_app(mut uart: Uart, mut led: Output) -> ! {
-    let mut buf = [0; 256];
+    let mut buf = [0u8; 256];
     loop {
-        let count = uart.read_until_idle(&mut buf).await;
+        let count = uart.read_until_idle(&mut buf).await.unwrap();
         let data = &buf[..count];
         for byte in data {
             blink_morse(byte.to_ascii_uppercase() as char, &mut led).await;
@@ -161,9 +177,18 @@ async fn blink_morse(character: char, led: &mut Output) {
 }
 
 struct MyApp {
-    message: String,
     led: Input,
-    uart: UartStimulus,
+
+    #[cfg(not(feature = "web-serial"))]
+    uart: Uart,
+
+    #[cfg(not(feature = "web-serial"))]
+    message: String,
+
+    #[cfg(feature = "web-serial")]
+    uart: Option<serial::web_serial::SerialRequest>,
+    #[cfg(feature = "web-serial")]
+    is_connected: Arc<AtomicBool>,
 }
 
 impl eframe::App for MyApp {
@@ -171,15 +196,42 @@ impl eframe::App for MyApp {
         ctx.request_repaint_after(Duration::from_millis(20));
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My morse Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Message: ");
-                ui.text_edit_singleline(&mut self.message)
-                    .labelled_by(name_label.id);
-            });
-            if ui.button("Send").clicked()
-                && let Ok(()) = self.uart.try_write(self.message.as_bytes())
+
+            #[cfg(feature = "web-serial")]
             {
-                self.message.clear();
+                let baud_rate = 9600;
+                let data_bits = 8;
+                let stop_bits = 1;
+
+                let options = web_sys::SerialOptions::new(baud_rate);
+                options.set_data_bits(data_bits);
+                options.set_stop_bits(stop_bits);
+
+                let is_connected = Arc::clone(&self.is_connected);
+                if self.is_connected.load(Ordering::SeqCst) {
+                    ui.label("Connected");
+                } else if ui.button("Connect").clicked() {
+                    let uart = self.uart.take();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        assert!(uart.unwrap().request(&options).await.is_ok());
+                        is_connected.store(true, Ordering::SeqCst);
+                    });
+                }
+            }
+
+            #[cfg(not(feature = "web-serial"))]
+            {
+                ui.horizontal(|ui| {
+                    let name_label = ui.label("Message: ");
+                    ui.text_edit_singleline(&mut self.message)
+                        .labelled_by(name_label.id);
+                });
+
+                if ui.button("Send").clicked()
+                    && let Ok(()) = self.uart.try_write(self.message.as_bytes())
+                {
+                    self.message.clear();
+                }
             }
 
             let color = match self.led.is_high().unwrap() {

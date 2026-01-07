@@ -7,14 +7,17 @@ mod utils;
 
 use core::time::Duration;
 use egui::TextureHandle;
-use embedded_graphics::pixelcolor::Gray8;
-use embedded_graphics::prelude::{Dimensions, GrayColor};
-use embedded_graphics::text::Text;
-use embedded_hal::digital::OutputPin;
-use embedded_hal::digital::PinState;
-use embedded_hal_sim::gpio::{self, Input, Output};
-use embedded_hal_sim::{graphics, sleep};
-use futures::select;
+use embassy_futures::select::select3;
+use embedded_graphics::{
+    pixelcolor::Gray8,
+    prelude::{Dimensions, GrayColor},
+    text::Text,
+};
+use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal_sim::{
+    gpio::{self, Input, Output},
+    graphics, sleep,
+};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -79,16 +82,18 @@ async fn simulated_app(
     mut reset: Input,
     mut start_stop: Input,
 ) -> ! {
-    use embedded_graphics::Drawable;
-    use embedded_graphics::draw_target::DrawTarget;
-    use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
-    use embedded_graphics::prelude::Point;
-    use embedded_graphics::text::Alignment;
+    use embedded_graphics::{
+        Drawable,
+        draw_target::DrawTarget,
+        mono_font::{MonoTextStyle, ascii::FONT_6X10, iso_8859_1::FONT_10X20},
+        prelude::Point,
+        text::Alignment,
+    };
     use embedded_hal_async::digital::Wait;
-    use futures::FutureExt;
 
-    let character_style = MonoTextStyle::new(&FONT_6X10, Gray8::WHITE);
-    let mut counter = 0u32;
+    let style_small = MonoTextStyle::new(&FONT_6X10, Gray8::WHITE);
+    let style_big = MonoTextStyle::new(&FONT_10X20, Gray8::WHITE);
+    let mut counter = 0.0f32;
 
     let mut is_started = false;
 
@@ -96,31 +101,47 @@ async fn simulated_app(
         display.clear(Gray8::BLACK).unwrap();
 
         // Draw centered text.
-        let text = &format!("embedded_graphics\ndisplay in egui\ncounter: {counter}");
         Text::with_alignment(
-            text,
-            Point::new(display.bounding_box().center().x, 7),
-            character_style,
+            "embedded_graphics\ndisplay in egui",
+            Point::new(display.bounding_box().center().x, 10),
+            style_small,
             Alignment::Center,
         )
         .draw(&mut display)
         .unwrap();
 
-        select! {
-            _ = start_stop.wait_for_rising_edge().fuse() => is_started = !is_started,
-            _ = reset.wait_for_rising_edge().fuse() => {
-               counter = 0;
-               is_started = false;
-            },
-            _ = sleep(Duration::from_millis(1000)).fuse() => if is_started {
-                counter += 1;
+        Text::with_alignment(
+            &heapless::format!(32; "counter: {counter:.1}").unwrap(),
+            Point::new(display.bounding_box().center().x, 42),
+            style_big,
+            Alignment::Center,
+        )
+        .draw(&mut display)
+        .unwrap();
+
+        match select3(
+            start_stop.wait_for_rising_edge(),
+            reset.wait_for_rising_edge(),
+            sleep(Duration::from_millis(100)),
+        )
+        .await
+        {
+            embassy_futures::select::Either3::First(_) => is_started = !is_started,
+            embassy_futures::select::Either3::Second(_) => {
+                counter = 0.0;
+                is_started = false;
+            }
+            embassy_futures::select::Either3::Third(_) => {
+                if is_started {
+                    counter += 0.1;
+                }
             }
         }
     }
 }
 
-const COLS: usize = 128;
-const ROWS: usize = 32;
+const COLS: usize = 256;
+const ROWS: usize = 64;
 
 struct MyApp {
     frame_buffer: Arc<Mutex<[[u8; COLS]; ROWS]>>,
@@ -160,7 +181,7 @@ impl eframe::App for MyApp {
                     self.frame_buffer.lock().as_flattened(),
                 );
                 self.texture.set(image, egui::TextureOptions::NEAREST);
-                let size = self.texture.size_vec2();
+                let size = self.texture.size_vec2() * 4.0;
                 let sized_texture = egui::load::SizedTexture::new(&self.texture, size);
                 ui.add(egui::Image::new(sized_texture).fit_to_exact_size(size));
             }
