@@ -39,11 +39,14 @@ impl<const COLS: usize, const ROWS: usize> DrawTarget for Display<COLS, ROWS> {
             // pixels without returning an error or causing a panic.
 
             // Calculate the index in the framebuffer.
-            self.framebuffer
+            if let Some(p) = self
+                .framebuffer
                 .lock()
                 .get_mut(coord.y as usize)
-                .and_then(|row: &mut [_; _]| row.get_mut(coord.x as usize))
-                .map(|p| *p = color.luma());
+                .and_then(|row| row.get_mut(coord.x as usize))
+            {
+                *p = color.luma();
+            }
         }
         Ok(())
     }
