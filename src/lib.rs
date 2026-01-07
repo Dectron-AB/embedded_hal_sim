@@ -6,8 +6,9 @@ pub mod flash;
 pub mod gpio;
 pub mod graphics;
 pub mod serial;
+pub mod utils;
 
 #[cfg(target_arch = "wasm32")]
 pub use gloo_timers::future::sleep;
 #[cfg(feature = "tokio")]
-pub use tokio::time::sleep;
+pub use tokio::time::{Interval, sleep};

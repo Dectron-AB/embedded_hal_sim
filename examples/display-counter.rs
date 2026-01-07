@@ -10,9 +10,11 @@ use egui::TextureHandle;
 use embedded_graphics::pixelcolor::Gray8;
 use embedded_graphics::prelude::{Dimensions, GrayColor};
 use embedded_graphics::text::Text;
+use embedded_hal::digital::OutputPin;
 use embedded_hal::digital::PinState;
-use embedded_hal_sim::gpio::input::{Input, InputStimulus};
+use embedded_hal_sim::gpio::{self, Input, Output};
 use embedded_hal_sim::{graphics, sleep};
+use futures::select;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -31,8 +33,8 @@ fn main() {
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-    let (reset, reset_stimulus) = Input::new(PinState::Low);
-    let (start_stop, start_stop_stimulus) = Input::new(PinState::Low);
+    let (reset, reset_stimulus) = gpio::new(PinState::Low);
+    let (start_stop, start_stop_stimulus) = gpio::new(PinState::Low);
     let (display, frame_buffer) = graphics::Display::new();
 
     run_wasm(
@@ -46,10 +48,8 @@ fn main() {
 async fn main() {
     use std::thread;
 
-    use embedded_hal_sim::{gpio::input::Input, graphics};
-
-    let (reset, reset_stimulus) = Input::new(PinState::Low);
-    let (start_stop, start_stop_stimulus) = Input::new(PinState::Low);
+    let (reset, reset_stimulus) = gpio::new(PinState::Low);
+    let (start_stop, start_stop_stimulus) = gpio::new(PinState::Low);
     let (display, frame_buffer) = graphics::Display::new();
 
     thread::spawn(|| ui(frame_buffer, reset_stimulus, start_stop_stimulus));
@@ -58,11 +58,7 @@ async fn main() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn ui(
-    frame_buffer: Arc<Mutex<[[u8; COLS]; ROWS]>>,
-    reset: InputStimulus,
-    start_stop: InputStimulus,
-) {
+fn ui(frame_buffer: Arc<Mutex<[[u8; COLS]; ROWS]>>, reset: Output, start_stop: Output) {
     let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
         event_loop_builder.with_any_thread(true);
     }));
@@ -88,7 +84,8 @@ async fn simulated_app(
     use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
     use embedded_graphics::prelude::Point;
     use embedded_graphics::text::Alignment;
-    use embedded_hal::digital::InputPin;
+    use embedded_hal_async::digital::Wait;
+    use futures::FutureExt;
 
     let character_style = MonoTextStyle::new(&FONT_6X10, Gray8::WHITE);
     let mut counter = 0u32;
@@ -109,18 +106,16 @@ async fn simulated_app(
         .draw(&mut display)
         .unwrap();
 
-        // TODO: Do some async stuff here to not burn cpu
-        if start_stop.is_high().unwrap() {
-            is_started = !is_started;
+        select! {
+            _ = start_stop.wait_for_rising_edge().fuse() => is_started = !is_started,
+            _ = reset.wait_for_rising_edge().fuse() => {
+               counter = 0;
+               is_started = false;
+            },
+            _ = sleep(Duration::from_millis(1000)).fuse() => if is_started {
+                counter += 1;
+            }
         }
-        if reset.is_high().unwrap() {
-            counter = 0;
-            is_started = false;
-        }
-        if is_started {
-            counter += 1;
-        }
-        sleep(Duration::from_millis(100)).await;
     }
 }
 
@@ -129,8 +124,8 @@ const ROWS: usize = 32;
 
 struct MyApp {
     frame_buffer: Arc<Mutex<[[u8; COLS]; ROWS]>>,
-    reset: InputStimulus,
-    start_stop: InputStimulus,
+    reset: Output,
+    start_stop: Output,
     texture: TextureHandle,
 }
 
@@ -138,8 +133,8 @@ impl MyApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         frame_buffer: Arc<Mutex<[[u8; COLS]; ROWS]>>,
-        reset: InputStimulus,
-        start_stop: InputStimulus,
+        reset: Output,
+        start_stop: Output,
     ) -> Self {
         Self {
             frame_buffer,
@@ -169,17 +164,18 @@ impl eframe::App for MyApp {
                 let sized_texture = egui::load::SizedTexture::new(&self.texture, size);
                 ui.add(egui::Image::new(sized_texture).fit_to_exact_size(size));
             }
-            if ui.button("Reset").is_pointer_button_down_on() {
-                self.reset.set(PinState::High);
-            } else {
-                self.reset.set(PinState::Low);
-            }
 
-            if ui.button("Start/Stop").is_pointer_button_down_on() {
-                self.start_stop.set(PinState::High);
-            } else {
-                self.start_stop.set(PinState::Low);
-            }
+            self.reset
+                .set_state(PinState::from(
+                    ui.button("Reset").is_pointer_button_down_on(),
+                ))
+                .unwrap();
+
+            self.start_stop
+                .set_state(PinState::from(
+                    ui.button("Start/Stop").is_pointer_button_down_on(),
+                ))
+                .unwrap();
         });
     }
 }

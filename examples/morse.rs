@@ -7,10 +7,12 @@ mod utils;
 
 use core::time::Duration;
 use egui::{Color32, Pos2};
+use embedded_hal::digital::InputPin;
 use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal_sim::gpio::{self, Input};
 use embedded_hal_sim::sleep;
 use embedded_hal_sim::{
-    gpio::output::{Output, OutputStimulus},
+    gpio::Output,
     serial::{self, Uart, UartStimulus},
 };
 
@@ -32,10 +34,10 @@ fn main() {
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
     let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
-    let (led, led_stimulus) = Output::new(PinState::Low);
+    let (led_stimulus, led) = gpio::new(PinState::Low);
 
     run_wasm(
-        MyApp {
+        |_| MyApp {
             uart: uart_stimulus,
             led: led_stimulus,
             message: String::new(),
@@ -50,7 +52,7 @@ async fn main() {
     use std::thread;
 
     let (uart, uart_stimulus) = serial::Uart::new(Duration::from_millis(20), 10);
-    let (led, led_stimulus) = Output::new(PinState::Low);
+    let (led_stimulus, led) = gpio::new(PinState::Low);
 
     thread::spawn(|| ui(uart_stimulus, led_stimulus));
 
@@ -58,7 +60,7 @@ async fn main() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn ui(uart: UartStimulus, led: OutputStimulus) {
+fn ui(uart: UartStimulus, led: Input) {
     let event_loop_builder: Option<EventLoopBuilderHook> = Some(Box::new(|event_loop_builder| {
         event_loop_builder.with_any_thread(true);
     }));
@@ -160,7 +162,7 @@ async fn blink_morse(character: char, led: &mut Output) {
 
 struct MyApp {
     message: String,
-    led: OutputStimulus,
+    led: Input,
     uart: UartStimulus,
 }
 
@@ -180,9 +182,9 @@ impl eframe::App for MyApp {
                 self.message.clear();
             }
 
-            let color = match self.led.get() {
-                PinState::Low => Color32::WHITE,
-                PinState::High => Color32::GREEN,
+            let color = match self.led.is_high().unwrap() {
+                true => Color32::GREEN,
+                false => Color32::WHITE,
             };
             ui.painter()
                 .circle_filled(Pos2::new(50.0, 150.0), 25.0, color);

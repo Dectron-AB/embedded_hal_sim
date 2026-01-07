@@ -1,28 +1,13 @@
+use crate::utils::SignalTx;
+use embedded_hal::digital::PinState;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 
-use embedded_hal::digital::PinState;
-
 pub struct Output {
-    state: Arc<AtomicBool>,
-}
-
-pub struct OutputStimulus {
-    state: Arc<AtomicBool>,
-}
-
-impl Output {
-    pub fn new(initial_state: PinState) -> (Self, OutputStimulus) {
-        let state = Arc::new(AtomicBool::new(initial_state == PinState::High));
-        (
-            Self {
-                state: Arc::clone(&state),
-            },
-            OutputStimulus { state },
-        )
-    }
+    pub(crate) state: Arc<AtomicBool>,
+    pub(crate) w: SignalTx<PinState>,
 }
 
 impl embedded_hal::digital::ErrorType for Output {
@@ -32,20 +17,13 @@ impl embedded_hal::digital::ErrorType for Output {
 impl embedded_hal::digital::OutputPin for Output {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         self.state.store(false, Ordering::SeqCst);
+        self.w.signal(PinState::Low);
         Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
         self.state.store(true, Ordering::SeqCst);
+        self.w.signal(PinState::High);
         Ok(())
-    }
-}
-
-impl OutputStimulus {
-    pub fn get(&mut self) -> PinState {
-        match self.state.load(Ordering::SeqCst) {
-            true => PinState::High,
-            false => PinState::Low,
-        }
     }
 }
