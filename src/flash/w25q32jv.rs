@@ -89,7 +89,9 @@ impl SyncNorFlash for W25q32jv {
         }
 
         let mut data = self.data.write().unwrap();
-        data.iter_mut().for_each(|b| *b = 0xFF);
+        data[from as usize..to as usize]
+            .iter_mut()
+            .for_each(|b| *b = 0xFF);
 
         Ok(())
     }
