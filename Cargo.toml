@@ -17,6 +17,8 @@ embedded-storage-async = { version = "0.4.1", optional = true }
 futures = "0.3.31"
 log = "0.4.29"
 parking_lot = "0.12.5"
+ddm = { path = "C:/Users/dechsn/Projekt/TTM/sw-ttm-genix/Software/ddm", features = ["no-std"] }
+critical-section ={ version = "*", features = ["std"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -32,7 +34,7 @@ web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
 gloo-timers = { version = "0.3.0", features = ["futures"] } # TimeoutFuture::new(1_000).await;
 
 [features]
-default = ["flash"]
+default = ["flash", "egui"]
 
 ethernet = ["tokio-tun", "embassy-net-driver-channel", "tokio"]
 tokio-tun = ["dep:tokio-tun"]

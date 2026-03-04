@@ -1,18 +1,19 @@
+pub mod ssd1322;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
 use embedded_graphics::{
-    Pixel,
-    pixelcolor::Gray8,
-    prelude::{DrawTarget, GrayColor, OriginDimensions, Size},
+    Pixel, pixelcolor::Gray4, prelude::{DrawTarget, GrayColor, OriginDimensions, Size}
 };
 
+pub type ImageBuffer<const COLS: usize, const ROWS: usize> = Arc<Mutex<[[u8; COLS]; ROWS]>>;
+
 pub struct Display<const COLS: usize, const ROWS: usize> {
-    framebuffer: Arc<Mutex<[[u8; COLS]; ROWS]>>,
+    pub framebuffer: ImageBuffer<COLS, ROWS>,
 }
 
 impl<const COLS: usize, const ROWS: usize> Display<COLS, ROWS> {
-    pub fn new() -> (Self, Arc<Mutex<[[u8; COLS]; ROWS]>>) {
+    pub fn new() -> (Self, ImageBuffer<COLS, ROWS>) {
         let framebuffer = Arc::new(Mutex::new([[0; _]; _]));
         (
             Self {
@@ -24,7 +25,7 @@ impl<const COLS: usize, const ROWS: usize> Display<COLS, ROWS> {
 }
 
 impl<const COLS: usize, const ROWS: usize> DrawTarget for Display<COLS, ROWS> {
-    type Color = Gray8;
+    type Color = Gray4;
     // `ExampleDisplay` uses a framebuffer and doesn't need to communicate with the display
     // controller to draw pixel, which means that drawing operations can never fail. To reflect
     // this the type `Infallible` was chosen as the `Error` type.
@@ -45,7 +46,7 @@ impl<const COLS: usize, const ROWS: usize> DrawTarget for Display<COLS, ROWS> {
                 .get_mut(coord.y as usize)
                 .and_then(|row| row.get_mut(coord.x as usize))
             {
-                *p = color.luma();
+                *p = 16 * color.luma();
             }
         }
         Ok(())

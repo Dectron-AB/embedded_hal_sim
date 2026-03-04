@@ -182,7 +182,7 @@ impl eframe::App for MyApp {
                 self.message.clear();
             }
 
-            let color = match self.led.is_high().unwrap() {
+            let color = match self.led.is_high() {
                 true => Color32::GREEN,
                 false => Color32::WHITE,
             };
