@@ -2,9 +2,48 @@ use embedded_hal::digital::{InputPin, PinState};
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::utils::SignalRx;
+
+/// Digital input or output level.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum Level {
+    /// Low
+    Low,
+    /// High
+    High,
+}
+
+impl From<bool> for Level {
+    fn from(val: bool) -> Self {
+        match val {
+            true => Self::High,
+            false => Self::Low,
+        }
+    }
+}
+
 pub struct Input {
     pub(crate) state: Arc<AtomicBool>,
     pub(crate) w: SignalRx<PinState>,
+}
+
+impl<'d> Input {
+    /// Get whether the pin input level is high.
+    #[inline]
+    pub fn is_high(&self) -> bool {
+        self.state.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get whether the pin input level is low.
+    #[inline]
+    pub fn is_low(&self) -> bool {
+        !self.is_high()
+    }
+
+    /// Get the current pin input level.
+    #[inline]
+    pub fn get_level(&self) -> Level {
+        self.is_high().into()
+    }
 }
 
 impl embedded_hal::digital::ErrorType for Input {
@@ -13,7 +52,7 @@ impl embedded_hal::digital::ErrorType for Input {
 
 impl InputPin for Input {
     fn is_high(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.state.load(std::sync::atomic::Ordering::SeqCst))
+        Ok(Input::is_high(self))
     }
 
     fn is_low(&mut self) -> Result<bool, Self::Error> {

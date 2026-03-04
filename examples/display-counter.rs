@@ -1,13 +1,13 @@
 ///
 /// Use this to run in browser
-/// trunk serve --example morse --features=egui
+/// trunk serve --example display-counter --features=egui
 ///
 /// Use this to run
 mod utils;
 
 use core::time::Duration;
 use egui::TextureHandle;
-use embedded_graphics::pixelcolor::Gray8;
+use embedded_graphics::pixelcolor::Gray4;
 use embedded_graphics::prelude::{Dimensions, GrayColor};
 use embedded_graphics::text::Text;
 use embedded_hal::digital::OutputPin;
@@ -17,6 +17,7 @@ use embedded_hal_sim::{graphics, sleep};
 use futures::select;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use ddm::ddm::ddm_init;
 
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::EventLoopBuilderHook;
@@ -87,13 +88,15 @@ async fn simulated_app(
     use embedded_hal_async::digital::Wait;
     use futures::FutureExt;
 
-    let character_style = MonoTextStyle::new(&FONT_6X10, Gray8::WHITE);
+    ddm_init();
+
+    let character_style = MonoTextStyle::new(&FONT_6X10, Gray4::WHITE);
     let mut counter = 0u32;
 
     let mut is_started = false;
 
     loop {
-        display.clear(Gray8::BLACK).unwrap();
+        display.clear(Gray4::BLACK).unwrap();
 
         // Draw centered text.
         let text = &format!("embedded_graphics\ndisplay in egui\ncounter: {counter}");
